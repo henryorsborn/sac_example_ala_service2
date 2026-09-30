@@ -22,61 +22,36 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"log"
-	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/henryorsborn/ala_service/internal/ala_service"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "host=localhost user=postgres password=postgres dbname=ala_service port=5432 sslmode=disable"
 	}
 
-	srv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           ala_service.NewMux(),
-		ReadHeaderTimeout: 5 * time.Second,
+	db, err := ala_service.OpenStore(dsn)
+	if err != nil {
+		log.Fatalf("failed to connect to db: %v",
+			err)
 	}
 
-	// Run the server in a goroutine so we can listen for shutdown signals
-	// on the main goroutine.
-	errCh := make(chan error, 1)
-	go func() {
-		log.Printf("ala_service listening on %s", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-			return
-		}
-		errCh <- nil
-	}()
+	h := &ala_service.Handler{DB: db}
 
-	// Wait for a signal or a fatal server error.
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case sig := <-sigCh:
-		log.Printf("received signal %s; shutting down", sig)
-	case err := <-errCh:
-		if err != nil {
-			log.Fatalf("server error: %v", err)
-		}
-		return
-	}
+	r := gin.Default()
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+	r.POST("/v1/aliases", h.CreateAlias)
+	r.GET("/:alias_url", h.Redirect)
 
-	// Drain in-flight requests for up to 10 seconds.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("graceful shutdown failed: %v", err)
-		os.Exit(1)
+	log.Println("url-shortener listening on :8080")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("server failed: %v", err)
 	}
-	log.Printf("shutdown complete")
 }
