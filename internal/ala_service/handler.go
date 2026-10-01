@@ -26,6 +26,11 @@ type createAliasResponse struct {
 	ShortURL string `json:"short_url"`
 }
 
+type getAliasesResponse struct {
+	Count  uint    `json:"count"`
+	Values []Alias `json:"values"`
+}
+
 // CreateAlias handles POST /v1/aliases.
 func (h *Handler) CreateAlias(c *gin.Context) {
 	var req createAliasRequest
@@ -48,6 +53,19 @@ func (h *Handler) CreateAlias(c *gin.Context) {
 		AliasID:  alias.AliasID,
 		AliasURL: alias.AliasURL,
 		ShortURL: buildShortURL(c, alias.AliasURL),
+	})
+}
+
+func (h *Handler) GetAliases(c *gin.Context) {
+	var aliases []Alias
+	if err := h.DB.Find(&aliases).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "unable to get aliases"})
+		return
+	}
+
+	c.JSON(http.StatusOK, getAliasesResponse{
+		Count:  uint(len(aliases)),
+		Values: aliases,
 	})
 }
 

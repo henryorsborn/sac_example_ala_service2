@@ -31,6 +31,6 @@ services:
     ports:
       - "3000:3000"
 
-  volumes:
-    pgdata:
-      name: pgdata
+volumes:
+  pgdata:
+    name: pgdata

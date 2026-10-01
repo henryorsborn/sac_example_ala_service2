@@ -23,31 +23,39 @@ package main
 
 import (
 	"log"
-	"os"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/henryorsborn/ala_service/internal/ala_service"
 )
 
 func main() {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "host=localhost user=postgres password=postgres dbname=ala_service port=5432 sslmode=disable"
-	}
-
-	db, err := ala_service.OpenStore(dsn)
+	db, err := ala_service.OpenStore()
 	if err != nil {
-		log.Fatalf("failed to connect to db: %v",
-			err)
+		log.Fatalf("failed to connect to db: %v", err)
 	}
 
 	h := &ala_service.Handler{DB: db}
 
 	r := gin.Default()
+
+	// CORS middleware: allow the React dev server (Vite on 5173, CRA on 3000)
+	// to call this API. In production this should be restricted to the actual
+	// frontend origin, not wildcarded.
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowCredentials: false,
+		MaxAge:           12 * time.Hour,
+	}))
+
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	r.POST("/v1/aliases", h.CreateAlias)
+	r.GET("/v1/aliases", h.GetAliases)
 	r.GET("/:alias_url", h.Redirect)
 
 	log.Println("url-shortener listening on :8080")

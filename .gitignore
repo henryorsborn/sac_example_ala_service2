@@ -21,3 +21,6 @@ go.work.sum
 .idea/
 *.log
 .DS_Store
+
+# Local SQLite databases (created by AutoMigrate on first run)
+*.db
