@@ -58,8 +58,58 @@ Default CI runs on [github-actions](https://github.com/features/actions). Each P
 
 ## Deployment
 
-Local only for now (`docker compose up`). Cloud deploy flags coming next:
-`--deploy=azure`, `--deploy=aws`, `--deploy=gcp-cloud-run`.
+Local by default (`docker compose up`). For cloud deploys, regenerate the
+scaffold with one of:
+
+```bash
+servicectl init demo --template=go-webapi --deploy=azure
+servicectl init demo --template=go-webapi --deploy=gcp-cloud-run
+servicectl init demo --template=go-webapi --deploy=gcp-gke-autopilot
+```
+
+The cloud overlays (Bicep for Azure, Terraform for GCP) ship passwordless
+CD via Workload Identity Federation — no JSON keys in CI.
+
+## API
+
+A short list of endpoints this scaffold implements. The same shape is what
+the upstream `servicectl` `go-webapi` template produces for any service.
+
+| Method | Path             | Purpose                                                              |
+|--------|------------------|----------------------------------------------------------------------|
+| GET    | `/healthz`       | Liveness probe — 200 if the process is up.                           |
+| POST   | `/v1/aliases`    | Create a short alias. Body: `{"alias_url": "...", "redirect_uri": "..."}`. Returns 201 on success, 409 on duplicate `alias_url`, 400 on validation error. |
+| GET    | `/v1/aliases`    | List all aliases. Returns `{"count": N, "values": [...]}` (always a JSON object, never null). |
+| GET    | `/:alias_url`    | Follow an alias. 302 to its `redirect_uri`, 404 if unknown.          |
+
+Example session against a freshly-scaffolded service:
+
+```bash
+# Create an alias
+curl -X POST http://localhost:3000/v1/aliases \
+  -H 'Content-Type: application/json' \
+  -d '{"alias_url":"github","redirect_uri":"https://github.com/henryorsborn"}'
+
+# Follow it
+curl -i http://localhost:3000/github
+# HTTP/1.1 302 Found
+# Location: https://github.com/henryorsborn
+
+# List all aliases
+curl http://localhost:3000/v1/aliases
+# {"count":1,"values":[{"alias_id":1,"alias_url":"github", ...}]}
+```
+
+## Pre-commit hook
+
+A `.githooks/pre-commit` script is bundled that runs the same smoke tests
+CI does — locally, before each commit. To enable it once per checkout:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+To bypass in an emergency (`--no-verify`).
 
 ## Secrets
 

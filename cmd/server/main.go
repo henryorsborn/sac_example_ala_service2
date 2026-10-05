@@ -23,6 +23,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -58,8 +59,15 @@ func main() {
 	r.GET("/v1/aliases", h.GetAliases)
 	r.GET("/:alias_url", h.Redirect)
 
-	log.Println("url-shortener listening on :8080")
-	if err := r.Run(":8080"); err != nil {
+	// Default to :3000 (matches the docker-compose port mapping and the
+	// convention used by Node/Express scaffolds). Honor $PORT for platforms
+	// like Cloud Run / Heroku / Railway that inject one.
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	log.Printf("url-shortener listening on :%s", port)
+	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }
